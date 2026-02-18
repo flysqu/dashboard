@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>dashboard :3</title>
+    <link rel="icon" type="image/png" href="favicon-login.png">
+    <link rel="stylesheet" href="style.css?v=3">
+    <script>
+        // Apply saved theme before paint to avoid flash
+        const saved = localStorage.getItem('dash_theme') || 'dark';
+        document.documentElement.dataset.theme = saved;
+        // Skip login if already authed and token not expired
+        const _t = localStorage.getItem('dash_token');
+        const _e = parseFloat(localStorage.getItem('dash_expires') || '0');
+        if (_t && Date.now() / 1000 < _e) {
+            window.location.replace('dashboard.html');
+        }
+    </script>
+</head>
+<body>
+    <button class="theme-toggle-login" id="theme-btn" onclick="toggleTheme()" title="toggle theme">🌙</button>
+
+    <div class="login-wrap">
+        <div class="infobox login-box">
+            <div class="win-bar">
+                <div class="win-dot"></div>
+                <span>dashboard.exe</span>
+            </div>
+            <div class="login-body">
+                <header>welcome back :3</header>
+
+                <!-- shown when yubikey is registered -->
+                <div id="auth-section" style="display:none">
+                    <button class="btn" id="auth-btn" onclick="loginWithKey()">tap your yubikey :3</button>
+                </div>
+
+                <!-- shown on first-time setup only -->
+                <div id="register-section" style="display:none">
+                    <p style="font-size:0.85rem; color:var(--text-muted); margin:0 0 10px">
+                        first time — register your key :3
+                    </p>
+                    <input type="password" id="reg-passphrase" placeholder="setup passphrase"
+                           autocomplete="off">
+                    <br>
+                    <button class="btn" id="reg-btn" onclick="registerKey()">register yubikey :3</button>
+                </div>
+
+                <p id="error-msg" class="error">–</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ── helpers ───────────────────────────────────────────────────
+        function b64url_decode(str) {
+            str = str.replace(/-/g, '+').replace(/_/g, '/');
+            const pad = str.length % 4 === 0 ? '' : '='.repeat(4 - str.length % 4);
+            return Uint8Array.from(atob(str + pad), c => c.charCodeAt(0)).buffer;
+        }
+        function b64url_encode(buf) {
+            const bytes = new Uint8Array(buf);
+            let str = '';
+            for (const b of bytes) str += String.fromCharCode(b);
+            return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }
+        function showError(msg) {
+            const el = document.getElementById('error-msg');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+        function clearError() {
+            const el = document.getElementById('error-msg');
+            el.style.display = 'none';
+        }
+
+        // ── init ──────────────────────────────────────────────────────
+        async function init() {
+            try {
+                const resp = await fetch('/api/webauthn/status');
+                const { registered } = await resp.json();
+                if (registered) {
+                    document.getElementById('auth-section').style.display = 'block';
+                } else {
+                    document.getElementById('register-section').style.display = 'block';
+                }
+            } catch {
+                showError('could not reach server :(');
+            }
+        }
+
+        // ── yubikey login ─────────────────────────────────────────────
+        async function loginWithKey() {
+            const btn = document.getElementById('auth-btn');
+            btn.textContent = 'waiting for key...';
+            btn.disabled = true;
+            clearError();
+            try {
+                const opts = await fetch('/api/webauthn/auth/begin', { method: 'POST' })
+                    .then(r => r.json());
+
+                opts.challenge = b64url_decode(opts.challenge);
+                if (opts.allowCredentials) {
+                    opts.allowCredentials = opts.allowCredentials.map(c => ({
+                        ...c, id: b64url_decode(c.id)
+                    }));
+                }
+
+                const assertion = await navigator.credentials.get({ publicKey: opts });
+
+                const body = {
+                    id:    assertion.id,
+                    rawId: b64url_encode(assertion.rawId),
+                    type:  assertion.type,
+                    response: {
+                        clientDataJSON:    b64url_encode(assertion.response.clientDataJSON),
+                        authenticatorData: b64url_encode(assertion.response.authenticatorData),
+                        signature:         b64url_encode(assertion.response.signature),
+                        userHandle: assertion.response.userHandle
+                            ? b64url_encode(assertion.response.userHandle) : null,
+                    },
+                };
+
+                const resp = await fetch('/api/webauthn/auth/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+
+                if (resp.ok) {
+                    const { token, expires } = await resp.json();
+                    localStorage.setItem('dash_token',   token);
+                    localStorage.setItem('dash_expires', String(expires));
+                    window.location.replace('dashboard.html');
+                } else {
+                    const err = await resp.json();
+                    throw new Error(err.detail || 'auth failed');
+                }
+            } catch (e) {
+                showError(e.name === 'NotAllowedError' ? 'cancelled :(' : 'auth failed :(');
+                btn.textContent = 'tap your yubikey :3';
+                btn.disabled = false;
+            }
+        }
+
+        // ── first-time registration ───────────────────────────────────
+        async function registerKey() {
+            const btn = document.getElementById('reg-btn');
+            const passphrase = document.getElementById('reg-passphrase').value.trim();
+            btn.textContent = 'touch your key...';
+            btn.disabled = true;
+            clearError();
+            try {
+                const optsResp = await fetch('/api/webauthn/register/begin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ passphrase }),
+                });
+                if (!optsResp.ok) {
+                    const err = await optsResp.json();
+                    throw new Error(err.detail || 'registration failed');
+                }
+                const opts = await optsResp.json();
+
+                opts.challenge = b64url_decode(opts.challenge);
+                opts.user.id   = b64url_decode(opts.user.id);
+
+                const cred = await navigator.credentials.create({ publicKey: opts });
+
+                const body = {
+                    id:    cred.id,
+                    rawId: b64url_encode(cred.rawId),
+                    type:  cred.type,
+                    response: {
+                        clientDataJSON:   b64url_encode(cred.response.clientDataJSON),
+                        attestationObject: b64url_encode(cred.response.attestationObject),
+                    },
+                };
+
+                const resp = await fetch('/api/webauthn/register/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+
+                if (resp.ok) {
+                    document.getElementById('register-section').style.display = 'none';
+                    document.getElementById('auth-section').style.display = 'block';
+                    await loginWithKey();
+                } else {
+                    const err = await resp.json();
+                    throw new Error(err.detail || 'registration failed');
+                }
+            } catch (e) {
+                showError(e.name === 'NotAllowedError' ? 'cancelled :(' : (e.message || 'registration failed :('));
+                btn.textContent = 'register yubikey :3';
+                btn.disabled = false;
+            }
+        }
+
+        // ── theme ─────────────────────────────────────────────────────
+        function toggleTheme() {
+            const html = document.documentElement;
+            const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
+            html.dataset.theme = next;
+            localStorage.setItem('dash_theme', next);
+            document.getElementById('theme-btn').textContent = next === 'dark' ? '🌙' : '☀️';
+        }
+        document.getElementById('theme-btn').textContent =
+            document.documentElement.dataset.theme === 'dark' ? '🌙' : '☀️';
+
+        init();
+    </script>
+</body>
+</html>

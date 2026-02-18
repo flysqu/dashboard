@@ -1,0 +1,6 @@
+backend/credential.json
+backend/uptime.db
+backend/services_config.py
+backend/__pycache__/
+*.pyc
+.env
