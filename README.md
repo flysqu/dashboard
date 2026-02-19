@@ -6,21 +6,21 @@ A personal home server dashboard with real-time service uptime monitoring, WebAu
 
 ## Features
 
-- **YubiKey authentication** — WebAuthn/FIDO2, no passwords. 30-day persistent sessions with a re-auth button and days-remaining indicator.
-- **Service health checks** — concurrent async HTTP checks for all services, with live status dots.
-- **Uptime tracking** — SQLite-backed 24h uptime percentage and 40-entry history bar per service, retained for 30 days.
-- **VPN status** — pings the WireGuard peer to show tunnel connectivity.
-- **Dark/light theme** — persisted in localStorage.
-- **Responsive** — works on mobile.
+- **YubiKey authentication** - WebAuthn/FIDO2, no passwords. 30-day persistent sessions with a re-auth button and days-remaining indicator.
+- **Service health checks** - concurrent async HTTP checks for all services, with live status dots.
+- **Uptime tracking** - SQLite-backed 24h uptime percentage and 40-entry history bar per service, retained for 30 days.
+- **VPN status** - pings the WireGuard peer to show tunnel connectivity.
+- **Dark/light theme** - persisted in localStorage.
+- **Responsive** - works on mobile.
 
 ## Stack
 
-- **Backend** — [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/), served as a single process
-- **Auth** — [py_webauthn](https://github.com/duo-labs/py_webauthn) for WebAuthn registration and authentication
-- **HTTP checks** — [httpx](https://www.python-httpx.org/) async client, all services checked concurrently
-- **Storage** — SQLite for uptime history, `credential.json` for the WebAuthn credential
-- **Frontend** — vanilla JS, no framework. [Bootstrap Icons](https://icons.getbootstrap.com/) for service icons.
-- **Font** — [Coiny](https://fonts.google.com/specimen/Coiny) from Google Fonts
+- **Backend** - [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/), served as a single process
+- **Auth** - [py_webauthn](https://github.com/duo-labs/py_webauthn) for WebAuthn registration and authentication
+- **HTTP checks** - [httpx](https://www.python-httpx.org/) async client, all services checked concurrently
+- **Storage** - SQLite for uptime history, `credential.json` for the WebAuthn credential
+- **Frontend** - vanilla JS, no framework. [Bootstrap Icons](https://icons.getbootstrap.com/) for service icons.
+- **Font** - [Coiny](https://fonts.google.com/specimen/Coiny) from Google Fonts
 
 ## Setup
 
